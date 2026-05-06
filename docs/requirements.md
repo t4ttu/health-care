@@ -34,7 +34,7 @@
 | スタイリング | Tailwind CSS |
 | ORM | Drizzle ORM |
 | データベース | Neon (サーバーレス PostgreSQL) |
-| 認証 | NextAuth.js |
+| 認証 | NextAuth.js v5 (Auth.js) |
 | グラフ描画 | Recharts |
 | デプロイ | Vercel |
 
@@ -50,6 +50,8 @@
 | A-2 | サインイン / サインアウト | Must |
 | A-3 | 未認証ユーザーのルートガード（ミドルウェア） | Must |
 
+> パスワードリセット（メール送信による再設定）は v1 対象外とする（v1.1 以降で検討）。
+
 #### 認証の詳細要件
 | # | 要件 | 優先度 |
 |---|------|--------|
@@ -57,7 +59,7 @@
 | A-5 | パスワードはハッシュ化して保存し、平文保存を禁止する | Must |
 | A-6 | パスワードは 8 文字以上を必須とする | Must |
 | A-7 | サインアップ時に重複メールアドレスはエラー表示する | Must |
-| A-8 | 連続ログイン失敗時のレート制限を行う（詳細は設計で定義） | Should |
+| A-8 | 連続ログイン失敗時のレート制限を行う（5回失敗で10分ロック。詳細は設計で定義） | Should |
 
 ---
 
@@ -70,6 +72,14 @@
 | 体重 (kg) | decimal | ✅ | 小数点第1位まで |
 | 体脂肪率 (%) | decimal | ❌ | 任意入力 |
 | メモ | text | ❌ | 自由記述 |
+
+#### 同一日付の記録について
+
+| 対象 | ポリシー |
+|------|----------|
+| body_logs | 1日1件とする（同一 user_id + recorded_at の重複登録はエラー。UNIQUE制約を付与） |
+| exercise_logs | 1日複数件可（種目が異なる運動を複数記録できる） |
+
 
 #### 機能一覧
 | # | 機能 | 優先度 |
@@ -216,17 +226,17 @@
 
 ```
 users
-  id, email, password_hash, height_cm, created_at
+  id, email, password_hash, height_cm, created_at, updated_at
 
 exercise_types
   id, name, sort_order, is_active, created_at
 
 body_logs
-  id, user_id, recorded_at, weight_kg, body_fat_pct, memo, created_at
+  id, user_id, recorded_at, weight_kg, body_fat_pct, memo, created_at, updated_at
 
 exercise_logs
   id, user_id, recorded_at, exercise_type_id, duration_min,
-  calories_burned, intensity, memo, created_at
+  calories_burned, intensity, memo, created_at, updated_at
 ```
 
 ### 6.1 制約・インデックス
@@ -235,6 +245,7 @@ exercise_logs
 |------|--------|
 | users.email | UNIQUE 制約 |
 | exercise_types.name | UNIQUE 制約 |
+| body_logs | UNIQUE 制約 (user_id, recorded_at)（1日1件制限）|
 | body_logs.user_id | NOT NULL、users.id への外部キー |
 | exercise_logs.user_id | NOT NULL、users.id への外部キー |
 | exercise_logs.exercise_type_id | NOT NULL、exercise_types.id への外部キー |
